@@ -1,0 +1,29 @@
+General goals:
+    create rec engine for music.
+    make engine 'adjustable: 
+      1. adjust rare vs basic, so one doesn't just get stuff one has heard of an hasn't bothered to review.
+      2. use mixture of tastes, so can pick from taste cluster. E.g. ambient music for studying and hip-hop for party are not related, and it is useful to have reccs from one or the other. 
+
+Factorization method: NNMF extention. Max_{i=1,2,...T}\hat{U_iu}V_d 
+Extention of https://dl.acm.org/doi/pdf/10.1145/2507157.2507209
+https://cseweb.ucsd.edu/~jmcauley/pdfs/cikm15.pdf
+
+could use counts, with 1 listen slightly negative to large counts = positive, like 
+    .assign(log_nos=lambda df: np.log2(np.where(df['numbers']==0, 3, df['numbers'])+.1)-2))
+    Rational: many listens means you like something, but one listen means you tried and didn't like. 
+
+initialization: could do simple copy of user vector, or could cluster items and assign user vectors to top x clusters they are closest to.
+
+
+Loss function:
+    l2, with term penalizing closenes of user's personas. l2 regularization penalty for latent factors, to try to find larger space of latent factors. + l2 penalty for number of latent factors in a user persona, to penalize 'single-persona' user state, and term of 1/x^2 for distance of the personas, which is differentiable to -2/(x^3) (doesn't go to zero, maybe ok once in Lagrangian?) 
+
+    weighted by popularity of item, eg 1/log(popularity)^T @ l2_loss. Rational: much higher value to get rec for rare item, vs rec for Avengers. 
+
+Some kind of higher weight to get closer to a ranking weigh? rational: order of low-ranked item is unimportant.
+
+add function to prediction for 'rarety' of item, tunable. do several version, compute mu and sigma for gaussian distribution, and include this for runtime prediction
+
+Training algorithm: either Alternating least squares or SGD.
+
+Ideas: preprocessing by normalizing against overall popularity. Penalize songs with a only a few listens that are overall popular. Rational: you've probably heard these songs on the radio, but still decided not to listen again. 
