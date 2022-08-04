@@ -1,78 +1,201 @@
-# Team Members:
-* Christopher Oyer
+# Multi-Persona Music Recommendations[¶](#Multi-Persona-Music-Recommendations)
 
-# Project Title: 
-* Diverse Music recommendations from NonNegative Matrix Factorization 
+### Matrix Factorization solved by an Augmented Alternating Least Squares[¶](#Matrix-Factorization-solved-by-an-augme)
 
-# Problem Statement:
-* I will create a recomendation engine for music based on on non-negative matrix factorization.
-* I would like recommendations to be "novel", not "you'd like the Beatles, Adele, and Drake." 
-* To make the engine adjustable: 
-    * I will include an adjustable tuning parameter at prediction time for rare vs basic, so one doesn't just get stuff one has heard of and hasn't bothered to review.
-    * use a mixture of tastes, so can pick from several taste clusters. E.g. one's favorite ambient music artist for studying and favorite hip-hop artist for workouts are not related, and it is useful to consider one user's taste to be the combination of several taste 'personas'. 
-    * This intereacts with the data source I am using, which is made up of (user, song, play_count) tuples. The play_count will indicate how much the user likes the artists, so this will bias the system to recommend more-played artist, which will need counteracting.
+## Team Member:[¶](#Team-Member:)
 
-# Data Source
-I am using http://millionsongdataset.com/tasteprofile/, and aggregating from song counts up to artist counts. I think artist recommendations are more useful, and processing to artist counts will reduce the matrix sizes and be faster to train. 
+Christopher Oyer
 
-# Methodology
+## Problem Statement[¶](#Problem-Statement)
 
-### Factorization method: NNMF extention. 
-I will be factoring a ratings matrix, $\textbf{X} \in \mathbb{R}^{m \times n} $  
-as a feature matrix $\textbf{W} \in \mathbb{R}^{m \times k}$ and a user tensor $\textbf{U} \in \mathbb{R}^{m \times n \times p}  $ 
-The P dimension is a set of several 'personas'. Each user is given several personas, which account for different types of taste they might have. 
-with the factorization defined as
+I wanted to investigate matrix factorization for content prediction,
+focusing on diversity of an individual\'s taste. I was especially
+interested in representing a user\'s taste with multiple \'personas\'.
 
-* $ \textbf{X}\equiv argmax _{p=1,2,...P}\textbf{U}_{iu}\textbf{V}_d^{\intercal} $  
-i.e, for each user x latent feature combination, choose the persona that maximixes this dot product, then multiply the resulting matrix against the item matrix.
+Standard matrix factorization is a decomposition of a ratings matrix,
+**X**∈ℝ^m×n^ as a user matrix **U**∈ℝ^m×k^ and a feature matrix
+**V**∈ℝ^n×k^\
+such that **X**≡**UV^T^**
 
+I changed the User matrix to instead to be tensor (in the looser sense
+of a matrix of more than 2 dimensions) : **U**∈ℝ^m×k×p^
 
+The equation to solve is: **X** ≡ *argmax*~P~ **U**~P~**V^⊺^**
 
+That is, the use\'s predicted rating whichever of their personas
+maximizes the predicted rating, when multiplied by the V matrix. I chose
+the max value because the opinion of an artist would be determined by
+whichever persona of music appreciation a user associates with that
+artist.
 
-### Loss function:
-* prediction accuracy: l2 of difference between predicted and observed (for those user/item pairs that actually existed)
-* l2 regularization penalty for latent factors, to try to find denser representation space of latent factors. (may or may not include)
-* l2 regularization for reccomendations: densify predictions, so heavily predicted items are penalized
-* l2 regularization for number of latent factors in a user persona, to penalize 'single-persona' user state,
-* penalty term on inverse of distance between each user's personas, to penalize representations that have similar personas within users: I would like to find diverse personas for each user. Penalty is sum over all distances between user's persona vectors. The penalty is 1/x^2. which is differentiable to -2/(x^3 * sum(norm derivatives)). I am concerned with two issues on this:
-    * it doesn't go to zero so the analytical solution would be $\infty$. I am planning to subtract a small hyperparameter term to ensure this maxes out after reaching some size.
-    * I am not sure I have the right derivative of an inverse of an l2 norm of a sum of l2 norms. If this is intractable I am hoping a good initialization is sufficient.
+## Data Source
 
+I used a pre-existing dataset, the
+<http://millionsongdataset.com/tasteprofile/>.
 
-$loss \equiv \lambda_{predAcc}\sum_{i,j\in X} (\textbf{X}_{i,j} - \textbf{W}_{i,j}\textbf{F}_{i,j})^2 $  
-        $+ \lambda_{predDiversity}\lVert\sum_u\textbf{W}_{i,j}\textbf{F}_{i,j} \rVert^2_2 $  
-        $+\lambda_{personas}\sum_{p}\sum_{u}\lVert U_k \rVert_2^2 $  
-        $- \lambda_{personaDistinction} \sum_m \dfrac{1}{\lVert \sum_{i\in p} \sum_{j\in p \;s.t.\; i \neq j}  (\lVert \textbf{U}_k \rVert_{2(i)}^2 - \lVert \textbf{U}_k \rVert_{2(j)}^2) \rVert_{2}^2}$  
+I aggregated from song counts up to artist counts using an allied
+dataset provided by the same organization. Artist recommendations make
+the data denser, and processing to artist counts will reduced the matrix
+size was faster and easier to fit in memory.
 
+The user rating was implicit from the play count. I initially tried
+using an offset, so that a small number of plays indicated a negative
+rating as compared to zero listens, but this made the data too sparse in
+the positive ratings.
 
-### Preprocessing
-could use counts, with 1 listen slightly negative to large counts = positive, like 
-```python
-    .assign(log_nos=lambda df: np.log2(np.where(df['numbers']==0, 3, df['numbers'])+.1)-2))
-```
-* Rational: many listens means you like something, but one listen means you tried and didn't like. 
+I also removed users who only listened to a single artist.
 
-### Initialization
-* simple copy of user vector
-* cluster items and assign user vectors to top x clusters they are closest to.
+## Methodology
 
-### prediction
-* for prediction (not during training), add a multiplication by a scalar & matrix for 'rarety' of item. 
-    * Rarety would be the overall frequency of an item.  
-    * The additional term would be, for a prediction vector for user 'u' $\textbf{p} = \hat{\textbf{X}}_u$  and item frequency vector  $\textbf{freq}$ and item inverse frequency vector $\textbf{invfreq}_n \equiv  1/\textbf{freq}_n$   
-the prediction would be $\textbf{p} \odot (tuningFactor* \textbf{freq}) \odot \textbf{invfreq}$  
-    * So using the tuning scalar with tuningFactor=1 would be the same; tuningFactor>1 would favor common items, and tuningFactor < 1 would favor rare items.
+After preprocessing the data, I rearranged it into a user x artist
+rating matrix, and took a log(x+eta) transform. This was beneficial to
+make the ratings closer to a gaussian distribution, and reduced the
+outsized impact of heavily listened-to artists.
 
-### Training algorithm
-* Assuming I did the math correctly, I will be using Alternating Least Squares with numpy, which seems to have fast convergence. If there is a problem, I will use SGD, which would probably be best implemented in a neural network.
-* ALS is defined as iteratively setting $\textbf{W}$ or $\textbf{F}$ as a constant, and solving the $\textbf{X} = \textbf{W}\textbf{F}$ equation with an analytical solution, then switching the free and fixed variable, solving again, until convergence.
+A standard train/test/validation split could be problematic because the
+holdout set would face a \'cold-start\' problem: if an artist or user is
+only in the holdout, and is then introduced, there is no data on them to
+enable a prediction. The ideal use case for the model is for a user to
+get a new recommendation, based on the model\'s knowledge of their taste
+(user x latents) and existing artists\' location in the latent space.
+
+Thus, I randomly selected 15% of the user/artist pairs and masked them
+for the training, and then used these as the test set.
+
+Next, the U and V matrices were initialized with random gaussian noise.
+
+I used matrix factorization, implementing in numpy. There were several
+reasons for this:
+
+-   I was especially interested in understanding the algorithmic
+    implications of different loss functions
+
+-   the multi-persona approach is not available in typical packages
+
+To solve for U and V, I chose to use Alternating Least Squares. This is
+a way to solve that iteratively fixe as constant **U** analytically find
+the best **V**^T^ to minimize the loss function, then fixes **V^T^** as
+a constant, and analytically finds the best **U.**
+
+The loss function that is minimized is:
+
+![](media/image1.png){width="6.5in" height="0.4013888888888889in"}
+
+The solution found by finding the gradient with respect to **U** then
+set equal to zero and solving for **V:**
+
+(**X^T^U**)(**U^T^U** + λ~U~**UI**) ;
+
+The solution found by finding the gradient with respect to **V** then
+set equal to zero and solving for **U**:
+
+(**XV**)(**V^T^V** + λ~V~**VI**)
+
+I began with creating a standard Alternating Least Squares python
+module. This was able to very quickly converge because, unlike gradient
+descent, it jumps directly to the best of the **U** / **T** given the
+other two matrices.
+
+I then implemented ALS with changes for multiple personas. I duplicated
+**X** p times (one for each persona), and taking the **U** tensor and
+flattening all of the user personas for all users into a single
+dimension, as though they were independent users. This meant instead of
+the **U**∈ℝ^m×k^ in the equation above, I used a **U**∈ℝ^m×k\*^ where
+k\*= k times p . Using these, I calculated
+![](media/image2.png){width="0.2541240157480315in"
+height="0.23960301837270342in"}, found each user's persona that most
+associated to each item, and created a
+![](media/image2.png){width="0.2541240157480315in"
+height="0.23960301837270342in"}∈ℝ^m×n×p^ that was masked to only have
+ratings for the correct persona.
+
+The step wherein the **V^T^** is optimized was very similar to the
+standard implementation. The only change was using
+the![](media/image2.png){width="0.2541240157480315in"
+height="0.23960301837270342in"}.
+
+The other step, optimizing the **B** matrix, was easier. I used
+![](media/image2.png){width="0.2541240157480315in"
+height="0.23960301837270342in"} for each 2-d slice along the P dimension
+of **U** (each slice having 1 persona per user). From these, I
+determined the persona that was associated with the maximum predicted
+rating for the artist for each user, and collapsed to only the maximum
+latents vector for that user.
 
 ## Evaluation and Final Results
 
-* I will look at the loss as defined above; the reconstruction loss will be the most important; the other regularization terms will hopefully allows qualitatively good predictions while being at worst neutral in their effect on reconstruction loss. 
-* I will look at the prediction results across as holdout set, both for accuracy, and separately for diversity: as an important goal of this reccommender is to give recommendations that are new, so statistical measure like 'fit exponential distribution to prediction frequencies and favor results with low $\lambda$ vaule. 
-* Hyperparameter tuning as well as testing actual recommendations will be used.
+This was disappointing. While trying numerous combinations of number of
+latents, number of personas, and different regularization weights, there
+was almost no difference in the converged test set prediction loss,
+except that less complex models were superior. Generally, the best
+values were found in the first three iterations, and often after the
+first iteration. This was surprising as it indicated that the
+regularization terms were of little benefit or even harmful to the test
+error, (even when the contribution to the total loss was almost entirely
+from the prediction loss, not the regularization terms).
 
-### Prior work/ references:
-* https://dl.acm.org/doi/pdf/10.1145/2507157.2507209
-* https://cseweb.ucsd.edu/~jmcauley/pdfs/cikm15.pdf
+And example of this effect:
+
+![Shape Description automatically
+generated](media/image3.png){width="6.5in" height="4.438888888888889in"}
+
+However, the values were much better than the baseline value (from the
+randomized starting values), so I believe the actual code was true to
+the specified model.
+
+Results for variations on the number of latent variables and the number
+of personas:
+
+![Shape Description automatically
+generated](media/image4.png){width="5.820318241469816in"
+height="4.027586395450569in"} ![Shape Description automatically
+generated](media/image5.png){width="5.772549212598425in"
+height="4.0037806211723534in"}
+
+More disappointing was that the prediction loss was worsened by the
+addition of the persona compared to the baseline model. Generally, the
+best results came from the simplest models, with only a few latents and
+with a single person dimension, i.e, for baseline model.
+
+![A picture containing text Description automatically
+generated](media/image6.png){width="6.5in" height="4.482638888888889in"}
+
+## 
+
+Additional research on this could prove more fruitful. Future directions
+could include increasing the dataset size to support more model
+complexity, or using more complicated loss function on the predictions
+to support predictions which are higher in terms of squared distance
+from the original data but lower in some other distance metric.
+
+## References
+
+Dataset requested citation:
+
+\@INPROCEEDINGS{Bertin-Mahieux2011,
+
+author = {Thierry Bertin-Mahieux and Daniel P.W. Ellis and Brian Whitman
+and Paul Lamere},
+
+title = {The Million Song Dataset},
+
+booktitle = {{Proceedings of the 12th International Conference on Music
+Information
+
+Retrieval ({ISMIR} 2011)}},
+
+year = {2011},
+
+owner = {thierry},
+
+timestamp = {2010.03.07}
+
+}
+
+Papers:
+
+-   <https://dl.acm.org/doi/pdf/10.1145/2507157.2507209>
+
+-   <https://cseweb.ucsd.edu/~jmcauley/pdfs/cikm15.pdf>
+
+Code for project available at https://github.com/chrisoyer/CDA_project
