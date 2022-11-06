@@ -2,10 +2,6 @@
 
 ### Matrix Factorization solved by an Augmented Alternating Least Squares[¶](#Matrix-Factorization-solved-by-an-augme)
 
-## Team Member:[¶](#Team-Member:)
-
-Christopher Oyer
-
 ## Problem Statement[¶](#Problem-Statement)
 
 I wanted to investigate matrix factorization for content prediction,
@@ -13,14 +9,12 @@ focusing on diversity of an individual\'s taste. I was especially
 interested in representing a user\'s taste with multiple \'personas\'.
 
 Standard matrix factorization is a decomposition of a ratings matrix,
-**X**∈ℝ^m×n^ as a user matrix **U**∈ℝ^m×k^ and a feature matrix
-**V**∈ℝ^n×k^\
-such that **X**≡**UV^T^**
+$\mathbf{X}\in\mathbb{R}^{m\times n}$ as a user matrix $\mathbf{U}\in\mathbb{R}^{m\times k}$ and a feature matrix $\mathbf{X}\in\mathbb{R}^{n\times k}$ such that $\mathbf{X}\equiv\mathbf{UV}^\top$
 
 I changed the User matrix to instead to be tensor (in the looser sense
-of a matrix of more than 2 dimensions) : **U**∈ℝ^m×k×p^
+of a matrix of more than 2 dimensions) : $\mathbf{U}\in\mathbb{R}^{m\times k\times p}$
 
-The equation to solve is: **X** ≡ *argmax*~P~ **U**~P~**V^⊺^**
+The equation to solve is: $\mathbf{X} \equiv argmax_p \mathbf{U}_p\mathbf{V}^\top$
 
 That is, the use\'s predicted rating whichever of their personas
 maximizes the predicted rating, when multiplied by the V matrix. I chose
@@ -62,7 +56,7 @@ get a new recommendation, based on the model\'s knowledge of their taste
 Thus, I randomly selected 15% of the user/artist pairs and masked them
 for the training, and then used these as the test set.
 
-Next, the U and V matrices were initialized with random gaussian noise.
+Next, the $\mathbf{U}$ and $\mathbf{V}$ matrices were initialized with random gaussian noise.
 
 I used matrix factorization, implementing in numpy. There were several
 reasons for this:
@@ -72,19 +66,19 @@ reasons for this:
 
 -   the multi-persona approach is not available in typical packages
 
-To solve for U and V, I chose to use Alternating Least Squares. This is
-a way to solve that iteratively fixe as constant **U** analytically find
-the best **V**^T^ to minimize the loss function, then fixes **V^T^** as
-a constant, and analytically finds the best **U.**
+To solve for $\mathbf{U}$ and $\mathbf{V}$, I chose to use Alternating Least Squares. This is
+a way to solve that iteratively fixed as constant $\mathbf{U}$ analytically find
+the best $\mathbf{V}^\top$ to minimize the loss function, then fixes $\mathbf{V}^\top$ as
+a constant, and analytically finds the best $\mathbf{U}$.  
 
 The loss function that is minimized is:
 
-![](media/image1.png){width="6.5in" height="0.4013888888888889in"}
+$loss \equiv \lambda_{predAcc}\sum_{u,v\in X} (\mathbf{X}_{u,v} - \mathbf{U}_u \mathbf{V}_v^\top)^2 + \lambda_U \lVert \sum_u \mathbf{U}_u \rVert_2^2 + \lambda_V \lVert \sum_v \mathbf{V}_v \rVert_2^2$ 
 
-The solution found by finding the gradient with respect to **U** then
-set equal to zero and solving for **V:**
+The solution found by finding the gradient with respect to $\mathbf{U}$ then
+set equal to zero and solving for $\mathbf{v}$:  
 
-(**X^T^U**)(**U^T^U** + λ~U~**UI**) ;
+$(\mathbf{X}^\top\mathbf{U})(\mathbf{U}^\top\mathbf{U} + \lambda_U\mathbf{U}\mathbf{I})$;  
 
 The solution found by finding the gradient with respect to **V** then
 set equal to zero and solving for **U**:
